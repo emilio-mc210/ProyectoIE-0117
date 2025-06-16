@@ -1,4 +1,5 @@
 //Modulo que inicializa el char device y lo puede limpiar
+
 #include<linux/module.h>
 #include<linux/init.h>
 #include"chardev.h"
@@ -8,7 +9,7 @@ static int __init mymodule_init(void) {
 }
 
 static void __exit mymodule_exit(void) {
-    cleanup_device();
+    cleanup_chardev(); //el nombre está incorrecto
 }
 
 module_init(mymodule_init);
