@@ -20,7 +20,7 @@ static struct device *char_device = NULL;
 //Arreglo de punteros, donde cada uno es un bloque de tamano ENTRY_SIZE
 //static char *buffer[MAX_ENTRIES];
 static struct {
-    char *entradas[MAX_ENTRIES]; //array de punteros a strings.
+    char *entries[MAX_ENTRIES]; //array de punteros a strings.
     int head;
     int tail;
     int count;
@@ -80,7 +80,7 @@ void cleanup_chardev(void) {
     unsigned long flags;
     spin_lock_irqsave(&circ_buffer.lock, flags);
     for (int i = 0; i < MAX_ENTRIES; i++) {
-        kfree(circ_buffer.entradas[i]);
+        kfree(circ_buffer.entries[i]);
         circ_buffer.entries[i] = NULL;
     }
     spin_unlock_irqrestore(&circ_buffer.lock, flags);
@@ -91,60 +91,79 @@ void cleanup_chardev(void) {
     unregister_chrdev(major, DEVICE_NAME);
 }
 
+//dev_read muestra la entrada mas antigua
 ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
-    
     unsigned long flags;
     char *msg = NULL;
-    int ret = 0;
+    size_t msg_len, to_copy;    
     spin_lock_irqsave(&circ_buffer.lock, flags);
+    
     if (circ_buffer.count == 0) {
         spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return 0; // No hay mensajes para leer
+        return 0; // Buffer vacío
     }
+    
     msg = circ_buffer.entries[circ_buffer.tail];
-    spin_unlock_irqrestore(&circ_buffer.lock, flags);
-    if (!msg) return 0;
-
-    size_t msg_len = strlen(msg); //longitud real del mensaje
-    size_t to_copy = min(len, msg_len - *offset); //se decide cuantos bytes copiar al usuario 
-
-    if (*offset >= msg_len) {
-        spin_lock_irqsave(&circ_buffer.lock, flags);
+    if (!msg) {
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
+        return 0;
+    }
+    
+    msg_len = strlen(msg);
+    to_copy = min(len, msg_len - *offset);
+    
+    if (*offset >= msg_len || to_copy == 0) {
+        // Mensaje completamente leído o offset inválido
+        kfree(circ_buffer.entries[circ_buffer.tail]);
+        circ_buffer.entries[circ_buffer.tail] = NULL;
         circ_buffer.tail = (circ_buffer.tail + 1) % MAX_ENTRIES;
         circ_buffer.count--;
-        spin_unlock_irqrestore(&circ_buffer.lock, flags);
         *offset = 0;
-        
-        return 0; //verifica si ya se leyo todo el mensaje
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
+        return 0;
     }
-    if (copy_to_user(buffer, msg + *offset, to_copy) != 0) //
+    
+    spin_unlock_irqrestore(&circ_buffer.lock, flags);
+    
+    if (copy_to_user(buffer, msg + *offset, to_copy) != 0) {
         return -EFAULT;
-
+    }
+    
     *offset += to_copy;
     return to_copy;
 }
 
 ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset) {
     unsigned long flags;
-    char *kbuf = kmalloc(len + 1, GFP_KERNEL);
-    if (!kbuf) return -ENOMEM;
-
+    char *kbuf;
+    
+    if (len <= 0 || len > ENTRY_SIZE) {
+        return -EINVAL; // Tamaño inválido
+    }
+    
+    kbuf = kmalloc(len + 1, GFP_KERNEL);
+    if (!kbuf) {
+        return -ENOMEM;
+    }
+    
     if (copy_from_user(kbuf, buffer, len) != 0) {
         kfree(kbuf);
         return -EFAULT;
     }
-
-    kbuf[len] = '\0';
+    
+    kbuf[len] = '\0'; // Asegurar terminación nula
+    
     spin_lock_irqsave(&circ_buffer.lock, flags);
     
-    // Si el buffer está lleno, liberamos la entrada más antigua
+    // Si el buffer está lleno, liberar la entrada más antigua
     if (circ_buffer.count == MAX_ENTRIES) {
         kfree(circ_buffer.entries[circ_buffer.tail]);
+        circ_buffer.entries[circ_buffer.tail] = NULL;
         circ_buffer.tail = (circ_buffer.tail + 1) % MAX_ENTRIES;
         circ_buffer.count--;
     }
     
-    // Asignamos el nuevo mensaje
+    // Asignar el nuevo mensaje
     if (circ_buffer.entries[circ_buffer.head]) {
         kfree(circ_buffer.entries[circ_buffer.head]);
     }
@@ -153,9 +172,7 @@ ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *of
     circ_buffer.head = (circ_buffer.head + 1) % MAX_ENTRIES;
     circ_buffer.count++;
     
-    spin_unlock_irqrestore(&circ_buffer.lock, flags);  
-    //increment_count();
-    kfree(kbuf);
-
+    spin_unlock_irqrestore(&circ_buffer.lock, flags);
+    
     return len;
 }
