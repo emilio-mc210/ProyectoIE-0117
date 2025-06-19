@@ -1,5 +1,8 @@
 #ifndef CHARDEV_H
 #define CHARDEV_H
+#define DEVICE_NAME "chardev" //Nombre del char device como aparece en /proc/devices
+#define ENTRY_SIZE 128 //Tamaño máximo en bytes que puede tener cada entrada en el buffer 
+#define MAX_ENTRIES 10 //Capacidad máxima de entradas que puede almacenar el buffer
 
 int init_chardev(void);
 void cleanup_chardev(void);
