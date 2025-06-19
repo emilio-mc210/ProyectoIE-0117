@@ -21,7 +21,7 @@ Proyecto de Plataformas
 * -co Cuenta la cantidad de entradas en el char device (de count).
 * -cl Limpia las entradas del char device (de clear). 
 
-##Makefile
+## Makefile
 1. `make` compila todo
 2. `make cli` compila el CLI
 3. `make modulo` compila solo el modulo
