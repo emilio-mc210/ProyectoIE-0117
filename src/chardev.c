@@ -55,16 +55,16 @@ int init_chardev(void) {
 
     major = register_chrdev(0, DEVICE_NAME, &fops); //Registra el chardev, se usa 0 como párametro para que el kernel asigne dinámicamente el numero mayor
     if (major < 0) { //Condicional para verificar si el registro tuvo exito. 
-        printk(KERN_ALERT "Registro del char device fallo con %i\n", major);
+        printk(KERN_ALERT "Modulo: Registro del char device fallo con %i\n", major);
         return major;  //No encontro un numero valido
     }
     //Si se completó el registro se imprime un mensaje informativo en el log del kernel con prioridad INFO
-    printk(KERN_INFO "Registro de char device exitoso con numero mayor %i\n", major);
+    printk(KERN_INFO "Modulo: Registro de char device exitoso con numero mayor %i\n", major);
 
     
 char_class = class_create(DEVICE_NAME); //Crea una clse de dispositivo en sysfs para que se cree automáticamente el nodo en /dev (crea el dispositivo en /dev/chardev)
 
-        if (IS_ERR(char_class)) { //Verifica si hubo un error al crear la clase, con IS_ERROR se detectan errores de punteros en el kernel 
+	if (IS_ERR(char_class)) { //Verifica si hubo un error al crear la clase, con IS_ERROR se detectan errores de punteros en el kernel 
         unregister_chrdev(major, DEVICE_NAME); //Si hubo un error, primero se desregistra el char device
         return PTR_ERR(char_class); //Retorna el código de error convertido en un valor numérico con PTR_ERROR
     }
@@ -87,7 +87,7 @@ char_class = class_create(DEVICE_NAME); //Crea una clse de dispositivo en sysfs 
     }
 
     //Si no hubo ningun error se imprime un mensaje indicando que el device se creó 
-    printk(KERN_INFO "Char device creado en /dev/%s\n", DEVICE_NAME);
+    printk(KERN_INFO "Modulo: Char device creado en /dev/%s\n", DEVICE_NAME);
 
     return 0;
 }
@@ -121,6 +121,9 @@ void cleanup_chardev(void) {
      * Elimina la asociación nombre -> operaciones (fops)
      * Se debe de hacer despues de device_destroy*/
     unregister_chrdev(major, DEVICE_NAME);
+
+    printk(KERN_INFO "Modulo: Modulo desmontado correctamente.\n");
+    printk(KERN_INFO "Modulo: Chardev con numero mayor %i eliminado correctamente", major);
 }
 
 //dev_read muestra la entrada mas antigua
