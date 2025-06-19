@@ -188,10 +188,9 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
         kfree(output_buffer);
         return 0;
     }
-
-    //Copiar al espacio usuario
+    
     if (copy_to_user(buffer, output_buffer + *offset, to_copy) != 0) {
-        /** Parámetros copy_to_user:
+        /** Copiar al espacio usuario
          * buffer, el destino (espacio usuario)
          * output_buffer + *offset, el origen (mensaje desde posición actual)
          * to_copy, la cantidad de bytes a copiar
