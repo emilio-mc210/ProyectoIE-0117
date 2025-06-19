@@ -10,11 +10,19 @@ KDIR := /lib/modules/$(shell uname -r)/build
 # Ruta al directorio actual
 PWD := $(shell pwd)
 
-# Regla por defecto: compilar el módulo
-all:
+# Nombre del programa CLI
+CLI_SRC = src/cli.c
+CLI_BIN = cli
+
+# Regla por defecto para compilar el modulo y el CLI
+all: 
 	make -C $(KDIR) M=$(PWD) modules
+	gcc -Wall -o $(CLI_BIN) $(CLI_SRC)
 
 # Limpiar archivos generados
 clean:
-	make -C $(KDIR) M=$(PWD) clean
+	make -C $(KDIR) M=$(PWD) clean 
+	rm -f $(CLI_BIN)
+
+
 
