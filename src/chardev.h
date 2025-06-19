@@ -12,4 +12,9 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset);
 //Funcion para escribir en el buffer, las funciones no deben ser static porque se usan en otros archivos
 ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset);
 
+//Funcion para abrir el dispositivo
+int dev_open(struct inode *inode, struct file *filep);
+//Funcion para cerrar el dispositivo/archivo
+int dev_release(struct inode *inode, struct file *filep);
+
 #endif
