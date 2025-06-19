@@ -127,59 +127,86 @@ void cleanup_chardev(void) {
 
 //Funcion de lectura del dispositivo 
 ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
-    unsigned long flags; //VAriable para guardar el estado de las interrupciones 
-    char *msg = NULL; //Puntero al mensaje que se va leer 
-    size_t msg_len, to_copy;    //LOngitud del mensajea y cuanto copiar  
+    unsigned long flags; //Variable para guardar el estado de las interrupciones 
+    char *output_buffer = NULL; // BUffer temporal para guardar las entradas y concatenarlas 
+    size_t output_size = 0; //Tamaño total necesario para todos los mensajes 
+    int i, pos; //Variables de iteración  y posición 
+    ssize_t ret = 0; //Varaible de retorno par los bytes leídos o error 
 
 
-    spin_lock_irqsave(&circ_buffer.lock, flags); //Bloquea el acceso al buffer para que no se use mientras se está leyendo del dispositivo 
+    spin_lock_irqsave(&circ_buffer.lock, flags); //Bloquea el acceso al buffer para que no se use mientras se está leyendo del dispositivo y guarda el estado de las interrupciones en flags para restaurarlo despues
     
-    if (circ_buffer.count == 0) { //Condicional para cuando el buffer está vacío y no hay nada que leer
-        spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el acceso al buffer 
-        return 0;  //Reornas que no hay mensjes 
+     //Calcula el tamaño total necesario para todas las entradas
+    for (i = 0; i < circ_buffer.count; i++) { //Calcula cuanto espacio se necesita para almacenar todos los mensjaes del buffer 
+        pos = (circ_buffer.tail + i) % MAX_ENTRIES;  //Calcula la posición circular actual 
+        if (circ_buffer.entries[pos]) {  //Sí existe un mensaje en esa posición sumanmos su longitud y +1 por el salto de línea
+            output_size += strlen(circ_buffer.entries[pos]) + 1; // +1 para el '\n'
+        }
     }
-    
-    msg = circ_buffer.entries[circ_buffer.tail]; //Obtiene el mensaje más antigua del buffer con tail, que es la "cola" del bufer 
 
-    if (!msg) { //Por seguridad se verifica que el mensaje sea valido(en caso de bugs, corrupciones de memoria, etc)
-        spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el buffer 
-        return 0; //Retorna que no hay mensajes validos 
-    }
-    //Calcula cuanto del mensjae se puede copiar 
-    msg_len = strlen(msg); //Longitud del mensaje almacenado 
-    to_copy = min(len, msg_len - *offset); //Lo minimo entre lo que piden y lo disponible 
-    
-    //Condicional para cuando ya se leyo toddo el mensaje o el offset es inválido 
-    if (*offset >= msg_len || to_copy == 0) {
-        kfree(circ_buffer.entries[circ_buffer.tail]); //Se libera la memoria
-        circ_buffer.entries[circ_buffer.tail] = NULL; //Marca como vacío 
-
-        //Actualiza la posición de tail cirularmente 
-        circ_buffer.tail = (circ_buffer.tail + 1) % MAX_ENTRIES;
-        circ_buffer.count--; //Indica que hay un mensaje menos en el buffer 
-        *offset = 0; //Resetea el offset para futuras lecturas 
-
-        spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el buffer 
+    if (output_size == 0) { //Si el buffer está vacío se desbloquea 
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
         return 0;
     }
-    
-    //Si se llego aquí es porque si hay datos que copiar 
-    spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el buffer antes de copiar 
-    
-    //Copia el mensaje desde el kernel, hasta que espacio usuario(buffer)
-    if (copy_to_user(buffer, msg + *offset, to_copy) != 0) {
-    /**Parámetros: 
-     * buffer, el destinoo(espacio usuario)
-     * msg + *offset, el origen(mensaje desde la posición actual)
-     * to_copy, la cantidad de bytes a copiar
-     * retorna 0 si hubo éxito o diferente de o si hay error
-     */
-        return -EFAULT; //Error si se falla la copia
-    }
-    
-    *offset += to_copy; //Actualiza el offset para la próxima lectura 
 
-    return to_copy; //Devuelve el número de bytes copiados 
+    output_buffer = kmalloc(output_size + 1, GFP_KERNEL); // Reserva memoria para almacenar todos los mensajes concatenados y +1 para el carcater nulo final ('\0')
+                                                        //GFP_KERNEL se usa para prioridad de asignación estándar 
+    if (!output_buffer) { //Si falla la asignación de memoria se desbloquea el buffer y retorna error 
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
+        return -ENOMEM; //Retorna error con error de no memoria (memoria insuficiente )
+    }
+
+    output_buffer[0] = '\0'; //Concatenación de las entradas. Se inicializa como string vacío 
+
+    for (i = 0; i < circ_buffer.count; i++) { //Recorre el buffer para concatenar los mensajes 
+
+        /**Calcula la posición real en el buffer circular usando aritmética modular:
+         *circ_buffer.tail: Índice de la entrada más antigua (punto de inicio)
+         *i: Desplazamiento desde el tail (0 a count-1)
+         *MAX_ENTRIES: Tamaño total del buffer circular
+         * 
+         * La operación módulo (%) asegura que el índice "dé la vuelta" cuando alcanza
+         * el final del buffer
+         */
+        pos = (circ_buffer.tail + i) % MAX_ENTRIES; 
+
+        /**
+             * Concatena la entrada actual al buffer de salida:
+             * output_buffer: Buffer destino donde se acumula todo el contenido
+             * circ_buffer.entries[pos]: Cadena actual a agregar
+             * 
+             * strcat automáticamente encuentra el final de output_buffer (busca el '\0'), copia la nueva cadena a partir de esa posición y agrega un nuevo '\0' al final del resultado
+             */
+        if (circ_buffer.entries[pos]) {
+            strcat(output_buffer, circ_buffer.entries[pos]);
+        }
+    }
+    spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el buffer luego de terminar la concatenación 
+
+    size_t to_copy = min(len, output_size - *offset);   //Determina cuantos bytes se puede copiar al usuario. Lo minimo entre lo solicitado y lo disponible 
+    if (to_copy <= 0) { //SI no hay nada más que copiar si libera la memoria y retorna 0 
+        kfree(output_buffer);
+        return 0;
+    }
+
+    //Copiar al espacio usuario
+    if (copy_to_user(buffer, output_buffer + *offset, to_copy) != 0) {
+        /** Parámetros copy_to_user:
+         * buffer, el destino (espacio usuario)
+         * output_buffer + *offset, el origen (mensaje desde posición actual)
+         * to_copy, la cantidad de bytes a copiar
+         * retorna 0 si hubo éxito o diferente de 0 si hay error
+         */
+        kfree(output_buffer); //Libera la memoria del buffer temporal 
+        return -EFAULT;
+    }
+
+    *offset += to_copy; //Actualiza el offset para la próxima lectura 
+    ret = to_copy; //Guarda el número de bytes copiados 
+
+    kfree(output_buffer); //Libera la memoria del buffer temporal 
+
+    return ret; //Retorna el número de bytes copiados o error 
 }
 
 //Funcion de esccritura en el dispositivo 

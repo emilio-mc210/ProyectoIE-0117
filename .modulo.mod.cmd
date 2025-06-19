@@ -1,0 +1,1 @@
+savedcmd_/home/Andres/ProyectoIE-0117/modulo.mod := printf '%s\n'   src/modulo.o src/chardev.o src/last.o | awk '!x[$$0]++ { print("/home/Andres/ProyectoIE-0117/"$$0) }' > /home/Andres/ProyectoIE-0117/modulo.mod
