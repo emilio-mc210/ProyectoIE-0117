@@ -25,8 +25,10 @@ static int head = 0, tail = 0, count = 0;
 
 //Operaciones del device
 static struct file_operations fops = {
-    .read = dev_read,
-    .write = dev_write
+	.open = dev_open, //Funcion llamada cuando se abre el dispositivo
+	.release = dev_release, //Funcion llamada cuando se cierra el char dev
+    .read = dev_read, //Función llamada cuando se lee del dispositivo
+    .write = dev_write //Función llamada cuando se escribe al dispositivo 
 };
 
 //Función para inicializar el char device
@@ -50,9 +52,10 @@ int init_chardev(void) {
     //Si se completó el registro se imprime un mensaje informativo en el log del kernel con prioridad INFO
     printk(KERN_INFO "Modulo: Registro de char device exitoso con numero mayor %i\n", major);
 
-    char_class = class_create(DEVICE_NAME);
+    
+	char_class = class_create(DEVICE_NAME); //Crea una clse de dispositivo en sysfs para que se cree automáticamente el nodo en /dev (crea el dispositivo en /dev/chardev)
 
-	if (IS_ERR(char_class)) { //Verifica si hubo un error al crear la clase, con IS_ERROR se detectan errores de punteros en el kernel 
+        if (IS_ERR(char_class)) { //Verifica si hubo un error al crear la clase, con IS_ERROR se detectan errores de punteros en el kernel 
         unregister_chrdev(major, DEVICE_NAME); //Si hubo un error, primero se desregistra el char device
         return PTR_ERR(char_class); //Retorna el código de error convertido en un valor numérico con PTR_ERROR
     }
@@ -171,4 +174,23 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
     spin_unlock_irqrestore(&circ_buffer.lock, flags); //Libera el spinlock 
     
     return len; //Si se tuvo exito retornamos el número de bytes escritos 
+}
+
+/**
+* Funcion para abrir el dispositivo
+*
+* @param inode permite obtener numero mayor y menor del dispositivo abierto
+* @param filep solo se mantiene mientras el dispositivo este abierto 
+**/
+int dev_open(struct inode *inode, struct file *filep){
+	printk(KERN_INFO "Modulo: Mayor: %i, Menor: %i\n", imajor(inode), iminor(inode));
+	return 0;
+}
+
+/**
+* Funcion para cerrar el char device
+**/
+int dev_release(struct inode *inode, struct file *filep){
+	printk(KERN_INFO "Modulo: Archivo cerrado");
+	return 0;
 }
