@@ -6,9 +6,7 @@
 #include <linux/spinlock.h> //Implementa spinlocks para protección contra accesos concurrentes. Se implementa para manejar el acceso al buffer circular 
 #include"chardev.h" //Funciones principales del driver del char device 
 
-#define DEVICE_NAME "chardev" //Nombre del char device como aparece en /proc/devices
-#define ENTRY_SIZE 128 //Tamaño máximo en bytes que puede tener cada entrada en el buffer 
-#define MAX_ENTRIES 10 //Capacidad máxima de entradas que puede almacenar el buffer 
+ 
 
 //Variables globales para este archivo
 static int major; //Número que el kernel asigna para identificar el chardevice 
