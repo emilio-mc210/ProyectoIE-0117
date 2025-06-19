@@ -10,3 +10,11 @@ Proyecto de Plataformas
 5. `cat /proc/devices | grep chardev` sirve para revisar si se creo el char device exitosamente.
 6. `cat /proc/modules | grep modulo` sirve para comprobar si se monto el modulo de kernel con exito.
 7. `lsmod` imprime los modulos cargados en el kernel. 
+## Flags para el programa userspace `cli_parser`
+
+* -h Muestra ayuda de como utilizar el programa.
+* -l Muestra el ultimo mensaje del char device.
+* -w Escribe en el char device.
+* -r Lee el char device, imprime todas las entradas.
+* -co Cuenta la cantidad de entradas en el char device (de count).
+* -cl Limpia las entradas del char device (de clear).
