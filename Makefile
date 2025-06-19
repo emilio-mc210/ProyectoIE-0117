@@ -15,8 +15,12 @@ CLI_SRC = src/cli.c
 CLI_BIN = cli
 
 # Regla por defecto para compilar el modulo y el CLI
-all: 
+all: modulo cli
+
+modulo: 
 	make -C $(KDIR) M=$(PWD) modules
+
+cli:
 	gcc -Wall -o $(CLI_BIN) $(CLI_SRC)
 
 # Limpiar archivos generados
