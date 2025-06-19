@@ -6,9 +6,7 @@
 #include <linux/spinlock.h> //Implementa spinlocks para protección contra accesos concurrentes. Se implementa para manejar el acceso al buffer circular 
 #include"chardev.h" //Funciones principales del driver del char device 
 
-#define DEVICE_NAME "chardev" //Nombre del char device como aparece en /proc/devices
-#define ENTRY_SIZE 128 //Tamaño máximo en bytes que puede tener cada entrada en el buffer 
-#define MAX_ENTRIES 10 //Capacidad máxima de entradas que puede almacenar el buffer 
+ 
 
 //Variables globales para este archivo
 static int major; //Número que el kernel asigna para identificar el chardevice 
@@ -137,6 +135,7 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
     size_t output_size = 0; //Tamaño total necesario para todos los mensajes 
     int i, pos; //Variables de iteración  y posición 
     ssize_t ret = 0; //Varaible de retorno par los bytes leídos o error 
+    //size_t msg_len , to_copy;
 
 
     spin_lock_irqsave(&circ_buffer.lock, flags); //Bloquea el acceso al buffer para que no se use mientras se está leyendo del dispositivo y guarda el estado de las interrupciones en flags para restaurarlo despues
@@ -208,7 +207,40 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
     *offset += to_copy; //Actualiza el offset para la próxima lectura 
     ret = to_copy; //Guarda el número de bytes copiados 
 
-    kfree(output_buffer); //Libera la memoria del buffer temporal 
+    kfree(output_buffer); //Libera la memoria del buffer temporal
+    /* 
+    if (circ_buffer.count == 0) {
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
+        return 0; // Buffer vacío
+    }
+    msg = circ_buffer.entries[circ_buffer.tail];
+    if (!msg) {
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
+        return 0;
+    }
+    msg_len = strlen(msg);
+    to_copy = min(len, msg_len - *offset);
+
+    if (*offset >= msg_len || to_copy == 0) {
+        // Mensaje completamente leído o offset inválido
+        kfree(circ_buffer.entries[circ_buffer.tail]);
+        circ_buffer.entries[circ_buffer.tail] = NULL;
+        circ_buffer.tail = (circ_buffer.tail + 1) % MAX_ENTRIES;
+        circ_buffer.count--;
+        *offset = 0;
+        spin_unlock_irqrestore(&circ_buffer.lock, flags);
+        return 0;
+    }
+    spin_unlock_irqrestore(&circ_buffer.lock, flags);
+    
+    if (copy_to_user(buffer, msg + *offset, to_copy) != 0) {
+        return -EFAULT;
+    }
+    
+    *offset += to_copy;
+    return to_copy;
+
+    */ 
 
     return ret; //Retorna el número de bytes copiados o error 
 }
