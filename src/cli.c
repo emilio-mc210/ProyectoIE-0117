@@ -18,14 +18,14 @@ void read_chardev(){
 	//Abrir char device solo para lectura
 	fd = open(DEVICE_PATH, O_RDONLY);
 	if(fd == -1){
-		fprintf(stderr, "Error abriendo el char device");
+		fprintf(stderr, "Error: No se logro abrir el char device\n");
 		return;
 	}
 	
 	//Leer informacion del archivo al buffer
 	bytes_read = read(fd, buffer, sizeof(buffer)-1); //Dejar espacio para \0
 	if(bytes_read == -1){
-		fprintf(stderr, "Error leyendo el char device");
+		fprintf(stderr, "Error: No se logro leer el char devicee\n");
 		return;
 	}
 
@@ -33,11 +33,35 @@ void read_chardev(){
 	buffer[bytes_read] = '\0';
 
 	//Imprimir contenido 
-	printf(" %s ",buffer);
+	printf("%s",buffer);
+	printf("\n");
 
 	//Cerrar el descriptor de archivo
 	close(fd);
 }
+
+void write_entry(const char *input){
+	int fd; //File descriptor
+
+	//Abrir char device solo para escritura
+	fd = open(DEVICE_PATH, O_WRONLY);
+	if(fd == -1){
+		fprintf(stderr, "Error: No se logro abrir el char device\n");
+		return;
+	}
+	
+	//Escribir en el buffer
+	char *msg = (char *)malloc(sizeof(char *)*(strlen(input)+1)); //Para el \n
+	
+	strcat(msg, input);
+	strcat(msg, "\n");
+	write(fd, msg, strlen(msg));
+	//Liberar memoria
+	free(msg);
+
+	//Cerrar el descriptor de archivo
+	close(fd);
+	}
 
 int main(int argc, char *argv[]){
 	vrgcli("Prueba de CLI v0.1"){
@@ -45,28 +69,35 @@ int main(int argc, char *argv[]){
 		vrgarg("-h\tDesplegar ayuda"){
 			vrgusage();
 		}
+
 		//Ultimo mensaje
 		vrgarg("-l\tMostrar ultimo mensaje"){
 			printf("Ultimo mensaje (return o algo)\n");
 		}
+
 		//Limpiar buffer
 		vrgarg("--clean\tLimpiar el buffer"){
 			printf("Limpiar buffer (return o algo)\n");
 		}
-		//Escribir en el device
-		vrgarg("-w\tEscribir en el char device"){
-			printf("Escribir en el dispositivo\n");
-		}
+
 		//Leer el device
 		vrgarg("-r\tLeer el char device"){
-			printf("Leer el dispositivo\n");
+			printf("Leyendo dispositivo:\n");
 			read_chardev();
 		}
+
 		//Contar las entradas del device
 		vrgarg("--count\tContar las entradas del device"){
 			printf("Contar entradas\n");
 		}
-		//Error
+		
+		//Escribir una entrada en el char device (Argumento opcional)
+		vrgarg("[message]\tThe string to write on the char device"){
+			printf("Escribiendo: %s\n", vrgarg);
+			write_entry(vrgarg);
+		}
+
+		//Error: Argumento no esperado
 		vrgarg(){
 			vrgusage("Unexpected argument: %s\n", vrgarg);
 		}
