@@ -1,6 +1,9 @@
 # ProyectoIE-0117
 Proyecto de Plataformas
 
+## Instalacion de biblioteca `vrg.h`
+Se debe descargar el archivo `vrg.h` de https://github.com/rdentato/vrg y colocarse en el directorio `src/` para poder compilar.
+    
 ## Comandos utiles para el proyecto
 
 1. `sudo chmod 666 /dev/chardev` permite uso del char device con mayor facilidad.
