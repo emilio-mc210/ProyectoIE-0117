@@ -5,18 +5,18 @@
 #include"last.h" //Gestiona el último mensaje ingresado en el buffer 
 #include <linux/spinlock.h> //Implementa spinlocks para protección contra accesos concurrentes. Se implementa para manejar el acceso al buffer circular 
 #include"chardev.h" //Funciones principales del driver del char device 
-
  
 
 //Variables globales para este archivo
-static int major; //Número que el kernel asigna para identificar el chardevice 
+static char command_mode[16] = "";
 
+static int major; //Número que el kernel asigna para identificar el chardevice 
 static struct class *char_class = NULL; //Puntero a una clase de dispositivo, permite que udev cree el nodo en /dev/chardev y crea un directorio en /sys/class/
 
 static struct device *char_device = NULL; /*Puntero al dispositivo dentro de la clase char_class para representar al char device, 
 permite crear el archivo en /dev/chardev y vincula el major/minor number con las operaciones del driver. Se inicializa en NULL para evitar errores*/
-
-
+//static char last_outpuT[ENTRY_SIZE * MAX_ENTRIES];
+//static char command_mode[16] = ""
 //Arreglo de punteros, donde cada uno es un bloque de tamano ENTRY_SIZE
 //static char *buffer[MAX_ENTRIES];
 
@@ -139,32 +139,37 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
 
 
     spin_lock_irqsave(&circ_buffer.lock, flags); //Bloquea el acceso al buffer para que no se use mientras se está leyendo del dispositivo y guarda el estado de las interrupciones en flags para restaurarlo despues
-    
-     //Calcula el tamaño total necesario para todas las entradas
-    for (i = 0; i < circ_buffer.count; i++) { //Calcula cuanto espacio se necesita para almacenar todos los mensjaes del buffer 
+    if (strcmp(command_mode, "last") == 0 && circ_buffer.count > 0){
+        int last_position = (circ_buffer.head -1 + MAX_ENTRIES) % MAX_ENTRIES;
+        if (circ_buffer.entries[last_position]){
+            output_size = strlen(circ_buffer.entries[last_position]) + 1;
+            output_buffer = kmalloc(output_size + 1, GFP_KERNEL);
+            if (!output_buffer){
+                spin_unlock_irqrestore(&circ_buffer.lock, flags);
+                return -ENOMEM;
+            }
+            snprintf(output_buffer, output_size + 1, "%s\n", circ_buffer.entries[last_position]);
+        }
+    }
+    else {
+       for (i = 0; i < circ_buffer.count; i++) { //Calcula cuanto espacio se necesita para almacenar todos los mensjaes del buffer 
         pos = (circ_buffer.tail + i) % MAX_ENTRIES;  //Calcula la posición circular actual 
         if (circ_buffer.entries[pos]) {  //Sí existe un mensaje en esa posición sumanmos su longitud y +1 por el salto de línea
             output_size += strlen(circ_buffer.entries[pos]) + 1; // +1 para el '\n'
         }
-    }
-
-    if (output_size == 0) { //Si el buffer está vacío se desbloquea 
+       } 
+       if (output_size == 0) { //Si el buffer está vacío se desbloquea 
         spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return 0;
-    }
-
-    output_buffer = kmalloc(output_size + 1, GFP_KERNEL); // Reserva memoria para almacenar todos los mensajes concatenados y +1 para el carcater nulo final ('\0')
-                                                        //GFP_KERNEL se usa para prioridad de asignación estándar 
-    if (!output_buffer) { //Si falla la asignación de memoria se desbloquea el buffer y retorna error 
+        return 0; 
+       }
+       output_buffer = kmalloc(output_size + 1, GFP_KERNEL);
+       if (!output_buffer) {
         spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return -ENOMEM; //Retorna error con error de no memoria (memoria insuficiente )
-    }
+        return -ENOMEM;
+       }
+       output_buffer[0] = '\0'; //Concatenación de las entradas. Se inicializa como string vacío 
 
-    output_buffer[0] = '\0'; //Concatenación de las entradas. Se inicializa como string vacío 
-
-    for (i = 0; i < circ_buffer.count; i++) { //Recorre el buffer para concatenar los mensajes 
-
-        /**Calcula la posición real en el buffer circular usando aritmética modular:
+       /**Calcula la posición real en el buffer circular usando aritmética modular:
          *circ_buffer.tail: Índice de la entrada más antigua (punto de inicio)
          *i: Desplazamiento desde el tail (0 a count-1)
          *MAX_ENTRIES: Tamaño total del buffer circular
@@ -172,8 +177,8 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
          * La operación módulo (%) asegura que el índice "dé la vuelta" cuando alcanza
          * el final del buffer
          */
-        pos = (circ_buffer.tail + i) % MAX_ENTRIES; 
-
+       for (i = 0; i < circ_buffer.count; i++) {
+        pos = (circ_buffer.tail + i) % MAX_ENTRIES;
         /**
              * Concatena la entrada actual al buffer de salida:
              * output_buffer: Buffer destino donde se acumula todo el contenido
@@ -181,11 +186,16 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
              * 
              * strcat automáticamente encuentra el final de output_buffer (busca el '\0'), copia la nueva cadena a partir de esa posición y agrega un nuevo '\0' al final del resultado
              */
-        if (circ_buffer.entries[pos]) {
+        if (circ_buffer.entries[pos]){
             strcat(output_buffer, circ_buffer.entries[pos]);
+
         }
+       }
     }
     spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el buffer luego de terminar la concatenación 
+    if (!output_buffer) {
+        return 0;
+    }
 
     size_t to_copy = min(len, output_size - *offset);   //Determina cuantos bytes se puede copiar al usuario. Lo minimo entre lo solicitado y lo disponible 
     if (to_copy <= 0) { //SI no hay nada más que copiar si libera la memoria y retorna 0 
@@ -207,42 +217,23 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
     *offset += to_copy; //Actualiza el offset para la próxima lectura 
     ret = to_copy; //Guarda el número de bytes copiados 
 
-    kfree(output_buffer); //Libera la memoria del buffer temporal
-    /* 
-    if (circ_buffer.count == 0) {
-        spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return 0; // Buffer vacío
+    kfree(output_buffer);
+     //Libera la memoria del buffer temporal
+    if (strcmp(command_mode, "last") == 0) {
+        strcpy(command_mode, "");
     }
-    msg = circ_buffer.entries[circ_buffer.tail];
-    if (!msg) {
-        spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return 0;
-    }
-    msg_len = strlen(msg);
-    to_copy = min(len, msg_len - *offset);
 
-    if (*offset >= msg_len || to_copy == 0) {
-        // Mensaje completamente leído o offset inválido
-        kfree(circ_buffer.entries[circ_buffer.tail]);
-        circ_buffer.entries[circ_buffer.tail] = NULL;
-        circ_buffer.tail = (circ_buffer.tail + 1) % MAX_ENTRIES;
-        circ_buffer.count--;
-        *offset = 0;
-        spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return 0;
-    }
-    spin_unlock_irqrestore(&circ_buffer.lock, flags);
     
-    if (copy_to_user(buffer, msg + *offset, to_copy) != 0) {
-        return -EFAULT;
-    }
-    
-    *offset += to_copy;
-    return to_copy;
-
-    */ 
+ 
+   
 
     return ret; //Retorna el número de bytes copiados o error 
+}
+// Añade esta función para cambiar modos
+static ssize_t set_command_mode(const char *mode) {
+    strncpy(command_mode, mode, sizeof(command_mode) - 1);
+    command_mode[sizeof(command_mode) - 1] = '\0';
+    return 0;
 }
 
 //Funcion de esccritura en el dispositivo 
@@ -288,6 +279,8 @@ ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *of
     if (circ_buffer.entries[circ_buffer.head]) { //Sí ya había un mensaje en head se libera
         kfree(circ_buffer.entries[circ_buffer.head]);
     }
+    circ_buffer.entries[circ_buffer.head] = kbuf;
+    set_last_message(kbuf);
     //Asigna el nuevo mensaje y actualiza los índices 
     circ_buffer.entries[circ_buffer.head] = kbuf; //Guarda el mensaje 
     circ_buffer.head = (circ_buffer.head + 1) % MAX_ENTRIES; //Mueve head un espacio 
@@ -297,6 +290,7 @@ ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *of
     
     return len; //Si se tuvo exito retornamos el número de bytes escritos 
 }
+
 
 /**
 * Funcion para abrir el dispositivo
