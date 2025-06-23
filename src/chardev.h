@@ -7,6 +7,8 @@
 int init_chardev(void);
 void cleanup_chardev(void);
 
+void clear_chardev(void); 
+
 //ssize_t es un tipo de dato para representar un numero de bytes o indicar un error si es negativo
 
 //Funcion para leer el buffer

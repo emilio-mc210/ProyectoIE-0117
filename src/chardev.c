@@ -246,6 +246,13 @@ ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *of
     if (len <= 0 || len > ENTRY_SIZE) { //Valida el tamaño de los datos. Rechaza el dato si el tamaño es invalido (vacío o mayor al limite )
         return -EINVAL; //Indica que el tamaño es invalido 
     }
+
+    //Necesario para limpiar el char device
+     if (len == 5 && strncmp(buffer, "CLEAR", 5) == 0) {  // Si el mensaje es "CLEAR"
+        clear_chardev();  // Llama a la función de limpieza
+        return len;       // Retorna éxito
+    }
+    //FIN
     
     //Reservar memoria en el kernel 
     kbuf = kmalloc(len + 1, GFP_KERNEL); //Se pide memoria para guardar el mensaje
@@ -309,4 +316,26 @@ int dev_open(struct inode *inode, struct file *filep){
 int dev_release(struct inode *inode, struct file *filep){
 	printk(KERN_INFO "Modulo: Archivo cerrado");
 	return 0;
+}
+
+//Funcion para limpiar el char device 
+void clear_chardev(void) {
+    unsigned long flags;
+    
+    spin_lock_irqsave(&circ_buffer.lock, flags);
+    
+    // Liberar todas las entradas del buffer
+    for (int i = 0; i < MAX_ENTRIES; i++) {
+        kfree(circ_buffer.entries[i]);
+        circ_buffer.entries[i] = NULL;
+    }
+    
+    // Reiniciar los índices y contador
+    circ_buffer.head = 0;
+    circ_buffer.tail = 0;
+    circ_buffer.count = 0;
+    
+    spin_unlock_irqrestore(&circ_buffer.lock, flags);
+    
+    printk(KERN_INFO "Modulo: Buffer limpiado completamente\n");
 }
