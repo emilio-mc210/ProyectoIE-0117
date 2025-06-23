@@ -63,6 +63,54 @@ void write_entry(const char *input){
 	close(fd);
 	}
 
+void count_entries() {
+    char buffer[ENTRY_SIZE * MAX_ENTRIES];
+    int fd;
+    ssize_t bytes_read;
+    int count = 0;
+
+    fd = open(DEVICE_PATH, O_RDONLY);
+    if(fd == -1){
+        fprintf(stderr, "Error: No se logró abrir el char device\n");
+        return;
+    }
+
+    bytes_read = read(fd, buffer, sizeof(buffer)-1);
+    close(fd);
+
+    if(bytes_read <= 0) {
+        printf("Número de entradas: 0\n");
+        return;
+    }
+
+    buffer[bytes_read] = '\0';
+
+    // cuenta las entradas del device, cada entrada termina con un salto de linea
+    char *token = strtok(buffer, "\n");
+    while(token != NULL) {
+        count++;
+        token = strtok(NULL, "\n");
+    }
+
+    printf("Número de entradas: %d\n", count);
+}
+
+//Para limpiar las entradas
+void clean_device(void) {
+    int fd = open(DEVICE_PATH, O_WRONLY);
+    if (fd == -1) {
+        fprintf(stderr, "Error: No se pudo abrir el char device\n");
+        return;
+    }
+
+    // Envía el comando especial "CLEAR" al driver
+    if (write(fd, "CLEAR", 5) < 0) {
+        fprintf(stderr, "Error al enviar comando de limpieza\n");
+    }
+
+    close(fd);
+}
+
 int main(int argc, char *argv[]){
 	vrgcli("Prueba de CLI v0.1"){
 		//Imprimir ayuda
@@ -78,6 +126,7 @@ int main(int argc, char *argv[]){
 		//Limpiar buffer
 		vrgarg("--clean\tLimpiar el buffer"){
 			printf("Limpiar buffer (return o algo)\n");
+			clean_device(); 
 		}
 
 		//Leer el device
@@ -89,6 +138,7 @@ int main(int argc, char *argv[]){
 		//Contar las entradas del device
 		vrgarg("--count\tContar las entradas del device"){
 			printf("Contar entradas\n");
+			count_entries(); 
 		}
 		
 		//Escribir una entrada en el char device (Argumento opcional)
