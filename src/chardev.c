@@ -158,16 +158,13 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
             output_size += strlen(circ_buffer.entries[pos]) + 1; // +1 para el '\n'
         }
        } 
-       if (output_size == 0) { //Si el buffer está vacío se desbloquea 
-        spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return 0; 
-       }
-       output_buffer = kmalloc(output_size + 1, GFP_KERNEL);
-       if (!output_buffer) {
-        spin_unlock_irqrestore(&circ_buffer.lock, flags);
-        return -ENOMEM;
-       }
-       output_buffer[0] = '\0'; //Concatenación de las entradas. Se inicializa como string vacío 
+       if (output_size > 0) { 
+        output_buffer = kmalloc(output_size + 1, GFP_KERNEL);//Si el buffer está vacío se desbloquea 
+        if (!output_buffer) {
+         spin_unlock_irqrestore(&circ_buffer.lock, flags);
+         return -ENOMEM;
+        }
+        output_buffer[0] = '\0'; //Concatenación de las entradas. Se inicializa como string vacío 
 
        /**Calcula la posición real en el buffer circular usando aritmética modular:
          *circ_buffer.tail: Índice de la entrada más antigua (punto de inicio)
@@ -191,6 +188,9 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
 
         }
        }
+
+       }   
+      
     }
     spin_unlock_irqrestore(&circ_buffer.lock, flags); //Desbloquea el buffer luego de terminar la concatenación 
     if (!output_buffer) {
@@ -219,22 +219,13 @@ ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset) {
 
     kfree(output_buffer);
      //Libera la memoria del buffer temporal
-    if (strcmp(command_mode, "last") == 0) {
+    if (strcmp(command_mode, "last") == 0){
         strcpy(command_mode, "");
     }
 
-    
- 
-   
-
     return ret; //Retorna el número de bytes copiados o error 
 }
-// Añade esta función para cambiar modos
-static ssize_t set_command_mode(const char *mode) {
-    strncpy(command_mode, mode, sizeof(command_mode) - 1);
-    command_mode[sizeof(command_mode) - 1] = '\0';
-    return 0;
-}
+
 
 //Funcion de esccritura en el dispositivo 
 ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset) {
@@ -251,6 +242,11 @@ ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *of
      if (len == 5 && strncmp(buffer, "CLEAR", 5) == 0) {  // Si el mensaje es "CLEAR"
         clear_chardev();  // Llama a la función de limpieza
         return len;       // Retorna éxito
+    }
+    else if ( len == 4 && strncmp(buffer, "LAST", 4) == 0){
+        strcpy(command_mode, "last");
+        command_mode[sizeof(command_mode)-1] = '\0';
+        return len;
     }
     //FIN
     
