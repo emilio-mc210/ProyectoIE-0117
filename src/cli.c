@@ -98,34 +98,38 @@ void write_entry(const char *input){
 	}
 
 void count_entries() {
-    char buffer[ENTRY_SIZE * MAX_ENTRIES];
-    int fd;
-    ssize_t bytes_read;
-    int count = 0;
+    char buffer[ENTRY_SIZE * MAX_ENTRIES]; //Buffer para almacenar las entradas leídas 
+    int fd; //Descriptor de archivo 
+    ssize_t bytes_read; //Número de bytes leídos 
+    int count = 0; //Contador de entradas 
 
-    fd = open(DEVICE_PATH, O_RDONLY);
-    if(fd == -1){
+    fd = open(DEVICE_PATH, O_RDONLY); //Abre el dispositivo en modo lectura
+    if(fd == -1){ //Si falla imprime error 
         fprintf(stderr, "Error: No se logró abrir el char device\n");
         return;
     }
 
-    bytes_read = read(fd, buffer, sizeof(buffer)-1);
-    close(fd);
+    bytes_read = read(fd, buffer, sizeof(buffer)-1); //Lee los datos del dispositivo y los almacena en el buffer, deja espacio para el carácter  nulo
+    close(fd); //Cierra el descriptor de archivo despues de leer el dispositivo 
 
-    if(bytes_read <= 0) {
+    if(bytes_read <= 0) { //Si no se leyo nada del dispositivo imprime 0 entradas
         printf("Número de entradas: 0\n");
         return;
     }
 
-    buffer[bytes_read] = '\0';
+    buffer[bytes_read] = '\0'; //Asegura que los datos leídos formen una cadena válida en C  terminando con el caracter nulo(Se hace para prevenir que siga leyendo datos fuera del buffer o zonas de memoria invalida)
 
     // cuenta las entradas del device, cada entrada termina con un salto de linea
-    char *token = strtok(buffer, "\n");
-    while(token != NULL) {
-        count++;
-        token = strtok(NULL, "\n");
+    char *token = strtok(buffer, "\n"); //La funcion strtok() divide el string en "tokens" usando como delimitador \n, cada token es una entrada 
+    while(token != NULL) { //Bucle que itera mientras strtok() siga encontrando líneas 
+        count++; //Incrementa el contador de entradas mientras se siga encontrando tokens 
+        
+		token = strtok(NULL, "\n");
+		/*continúa buscando en el string ORIGINAL (buffer) desde donde quedó la última vez, devolviendo el siguiente token.
+		*NULL indica que debe seguir procesando el mismo string.
+    	*Cuando no hay más tokens, devuelve NULL y el bucle termina.
+		*/ 
     }
-
     printf("Número de entradas: %d\n", count);
 }
 
