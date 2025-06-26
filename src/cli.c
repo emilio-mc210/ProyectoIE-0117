@@ -10,31 +10,49 @@
 #define ENTRY_SIZE 128
 #define MAX_ENTRIES 10
 
-void read_chardev(){
+void read_chardev(int last_only){
 	char buffer[ENTRY_SIZE*MAX_ENTRIES];
 	int fd; //File descriptor
 	ssize_t bytes_read;
+	int flags = last_only ? O_RDWR : O_RDONLY;
 
 	//Abrir char device solo para lectura
-	fd = open(DEVICE_PATH, O_RDONLY);
+	fd = open(DEVICE_PATH, flags);
 	if(fd == -1){
 		fprintf(stderr, "Error: No se logro abrir el char device\n");
 		return;
 	}
-	
+	if (last_only){
+		if (write(fd,"LAST", 4) == -1){
+			fprintf(stderr, "ERror al enviar comnado\n");
+			close(fd);
+			return;
+		}
+
+	}
 	//Leer informacion del archivo al buffer
 	bytes_read = read(fd, buffer, sizeof(buffer)-1); //Dejar espacio para \0
 	if(bytes_read == -1){
 		fprintf(stderr, "Error: No se logro leer el char devicee\n");
 		return;
 	}
+	if (bytes_read > 0) {
+        buffer[bytes_read] = '\0';
+        printf("%s", buffer);
+        if (buffer[bytes_read-1] != '\n') {
+            printf("\n");
+        }
+    }
+
+ 
+
 
 	//Terminar el buffer con \0 para tratarlo como string
-	buffer[bytes_read] = '\0';
+	//buffer[bytes_read] = '\0';
 
 	//Imprimir contenido 
-	printf("%s",buffer);
-	printf("\n");
+	//printf("%s",buffer);
+	//printf("\n");
 
 	//Cerrar el descriptor de archivo
 	close(fd);
@@ -42,6 +60,8 @@ void read_chardev(){
 
 void write_entry(const char *input){
 	int fd; //File descriptor
+	char *msg = NULL;
+	size_t msg_len;
 
 	//Abrir char device solo para escritura
 	fd = open(DEVICE_PATH, O_WRONLY);
@@ -49,13 +69,27 @@ void write_entry(const char *input){
 		fprintf(stderr, "Error: No se logro abrir el char device\n");
 		return;
 	}
+	msg_len = strlen(input) + 2; // +1 para \n y +1 para \0
+    msg = malloc(msg_len);
+    if (!msg) {
+        fprintf(stderr, "Error: No se pudo asignar memoria\n");
+        close(fd);
+        return;
+    }
+    
+    snprintf(msg, msg_len, "%s\n", input);
+    
+    if (write(fd, msg, strlen(msg)) == -1) {
+        fprintf(stderr, "Error al escribir en el dispositivo\n");
+    }
+
 	
 	//Escribir en el buffer
-	char *msg = (char *)malloc(sizeof(char *)*(strlen(input)+1)); //Para el \n
+	/*char *msg = (char *)malloc(sizeof(char *)*(strlen(input)+1)); //Para el \n
 	
 	strcat(msg, input);
 	strcat(msg, "\n");
-	write(fd, msg, strlen(msg));
+	write(fd, msg, strlen(msg));*/
 	//Liberar memoria
 	free(msg);
 
@@ -121,6 +155,7 @@ int main(int argc, char *argv[]){
 		//Ultimo mensaje
 		vrgarg("-l\tMostrar ultimo mensaje"){
 			printf("Ultimo mensaje (return o algo)\n");
+			read_chardev(1);
 		}
 
 		//Limpiar buffer
@@ -132,7 +167,7 @@ int main(int argc, char *argv[]){
 		//Leer el device
 		vrgarg("-r\tLeer el char device"){
 			printf("Leyendo dispositivo:\n");
-			read_chardev();
+			read_chardev(0);
 		}
 
 		//Contar las entradas del device
