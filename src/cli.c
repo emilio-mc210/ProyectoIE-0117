@@ -47,7 +47,7 @@ void read_chardev(int last_only){
 	/*Manejo de comando LAST*/
 	if (last_only){
 		if (write(fd,"LAST", 4) == -1){
-			fprintf(stderr, "Error al enviar comando\n");
+			fprintf(stderr, "Error: No se logro enviar comando\n");
 			close(fd);
 			return;
 		}
@@ -105,7 +105,7 @@ void write_entry(const char *input){
     snprintf(msg, msg_len, "%s\n", input);
 
     if (write(fd, msg, strlen(msg)) == -1) {
-        fprintf(stderr, "Error al escribir en el dispositivo\n");
+        fprintf(stderr, "Error: No se logro al escribir en el dispositivo\n");
     }
 	free(msg);
 	close(fd);
@@ -148,7 +148,7 @@ void count_entries() {
     /*La funcion strtok() divide el string en "tokens" usando como delimitador \n, cada token es una entrada
 	*EL bucle itera mientras strok() siga encontrando líneas e incrementa el contador */
     char *token = strtok(buffer, "\n");
-    while(token != NULL) { / 
+    while(token != NULL) { 
         count++; 
 
         /*Continúa buscando en el buffer desde donde quedó la última vez, devolviendo el siguiente token.
@@ -170,13 +170,13 @@ void clean_device(void) {
         return;
     }
     if (write(fd, "CLEAR", 5) < 0) {
-        fprintf(stderr, "Error al enviar comando de limpieza\n");
+        fprintf(stderr, "Error: No se pudo enviar comando de limpieza\n");
     }
     close(fd);
 }
 
 int main(int argc, char *argv[]){
-	vrgcli("Prueba de CLI v0.1"){
+	vrgcli("Programa de userspace v1.0"){
 
 		//Muestra ayuda
 		vrgarg("-h\tDesplegar ayuda"){
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]){
 
 		//Limpiar buffer
 		vrgarg("--clean\tLimpiar el buffer"){
-			printf("Limpiando el char device)\n");
+			printf("Limpiando buffer\n");
 			clean_device(); 
 		}
 
