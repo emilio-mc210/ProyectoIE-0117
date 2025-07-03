@@ -24,7 +24,7 @@ static int __init mymodule_init(void) {
  *La macro __exit le indica al kernel que esta función solo se usa al descargar el módulo y puede ser optimizada en módulos embebidos.
  */
 static void __exit mymodule_exit(void) {
-    cleanup_chardev(); //el nombre está incorrecto
+    cleanup_chardev(); 
 }
 
 /*Registro del modulo:
